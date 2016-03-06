@@ -29,6 +29,11 @@ config = [{
 			#{pkg}/bin/marathon-etcd
 	EOS
 	user: "root",
+	
+	upgradeStrategy: {
+		minimumHealthCapacity: 0,
+		maximumOverCapacity: 0,
+	},
 }]
 
 http = Net::HTTP.new "marathon.kevincox.ca", 443

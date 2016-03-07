@@ -5,7 +5,6 @@ require 'bundler/setup'
 require 'json'
 require 'net/http'
 require 'openssl'
-require 'pp'
 require 'socket'
 require 'thread'
 
@@ -69,8 +68,6 @@ Thread.new do
 			ttl  = labels.fetch('DNS_TTL', cdn ? 300 : 120).to_i
 			
 			app['tasks'].each do |task|
-				pp task
-				pp task['host']
 				ip = ips[task['host']]
 				key = "/services/#{type}-#{name}/#{ip}"
 				value = to_json type: type,

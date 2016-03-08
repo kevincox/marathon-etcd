@@ -5,6 +5,7 @@ require 'bundler/setup'
 require 'json'
 require 'net/http'
 require 'openssl'
+require 'pp'
 require 'socket'
 require 'thread'
 
@@ -67,7 +68,12 @@ Thread.new do
 			cdn  = %w(1 y yes on).include? labels.fetch('DNS_CDN', '1')
 			ttl  = labels.fetch('DNS_TTL', cdn ? 300 : 120).to_i
 			
+			healthchecks = app['healthChecks'].length
+			
 			app['tasks'].each do |task|
+				hcs = task.fetch 'healthCheckResults', [].freeze
+				next unless hcs && hcs.count{|hc| hc['alive'] } == healthchecks
+				
 				ip = ips[task['host']]
 				key = "/services/#{type}-#{name}/#{ip}"
 				value = to_json type: type,

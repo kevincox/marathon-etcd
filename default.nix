@@ -6,7 +6,6 @@ with import <nixpkgs> {}; let
 		cpus = "JSON_UNSTRING 0.01 JSON_UNSTRING";
 		mem = 20;
 		disk = 0;
-		
 		ports = [];
 		
 		cmd = ''

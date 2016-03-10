@@ -1,67 +1,55 @@
 with import <nixpkgs> {}; let
-	marathon = [{
-		id = "/marathon-etcd";
-		instances = 1;
+	klib = import (
+		builtins.fetchTarball https://github.com/kevincox/nix-lib/archive/master.tar.gz
+	);
+in rec {
+	out = stdenv.mkDerivation {
+		name = "marathon-etcd";
 		
-		cpus = "JSON_UNSTRING 0.01 JSON_UNSTRING";
-		mem = 20;
-		disk = 0;
-		ports = [];
+		meta = {
+			description = "Keep etcd dns records in sync with marathon tasks.";
+			homepage = https://kevincox.ca;
+		};
 		
-		cmd = ''
-			set -ea
-			source /etc/kevincox-environment
-			source /etc/marathon-etcd
-			
-			nix-store -r PKG --add-root pkg --indirect
-			
-			exec sudo -E -umarathon-etcd \
-				PKG/bin/marathon-etcd
+		src = builtins.filterSource (name: type:
+			(lib.hasPrefix (toString ./Gemfile) name) ||
+			(lib.hasPrefix (toString ./bin) name)
+		) ./.;
+		
+		SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
+		
+		buildInputs = [ ruby bundler makeWrapper ];
+		
+		buildPhase = ''
+			bundle install --standalone
+			rm -r bundle/ruby/*/cache/
 		'';
-		user = "root";
+		
+		installPhase = ''
+			mkdir -p "$out"
+			cp -rv bundle "$out"
+			install -Dm755 bin/marathon-etcd.rb "$out/bin/marathon-etcd"
+			
+			wrapProgram $out/bin/marathon-etcd \
+				--set RUBYLIB "$out/bundle"
+		'';
+	};
+	
+	marathon = klib.marathon.config [{
+		id = "/marathon-etcd";
+		
+		mem = 20;
+		
+		env-files = [
+			"/etc/kevincox-etcd"
+			"/etc/kevincox-marathon-etcd"
+		];
+		exec = [ "${out}/bin/marathon-etcd" ];
+		user = "marathon-etcd";
 		
 		upgradeStrategy = {
 			minimumHealthCapacity = 0;
 			maximumOverCapacity = 0;
 		};
 	}];
-in stdenv.mkDerivation {
-	name = "marathon-etcd";
-	
-	outputs = ["out" "marathon"];
-	
-	meta = {
-		description = "Keep etcd dns records in sync with marathon tasks.";
-		homepage = https://kevincox.ca;
-	};
-	
-	src = builtins.filterSource (name: type:
-		(lib.hasPrefix (toString ./Gemfile) name) ||
-		(lib.hasPrefix (toString ./bin) name)
-	) ./.;
-	
-	SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
-	
-	buildInputs = [ ruby bundler makeWrapper ];
-	
-	buildPhase = ''
-		bundle install --standalone
-		rm -r bundle/ruby/*/cache/
-	'';
-	
-	installPhase = ''
-		mkdir -p "$out"
-		cp -rv bundle "$out"
-		install -Dm755 bin/marathon-etcd.rb "$out/bin/marathon-etcd"
-		
-		wrapProgram $out/bin/marathon-etcd \
-			--set RUBYLIB "$out/bundle"
-		
-		# Marathon config.
-		install ${builtins.toFile "marathon" (builtins.toJSON marathon)} "$marathon"
-		substituteInPlace "$marathon" \
-			--replace '"JSON_UNSTRING' "" \
-			--replace 'JSON_UNSTRING"' "" \
-			--replace PKG "$out"
-	'';
 }

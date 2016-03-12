@@ -16,18 +16,18 @@ CRT = ENV.fetch "MARATHON_CRT"
 KEY = ENV.fetch "MARATHON_KEY"
 
 ips = Hash.new do |this, host|
-	this[host] = Socket::getaddrinfo(host, nil)[0][3]
+	this[host] = Socket::getaddrinfo(host, nil, nil, :STREAM, nil, nil, false)
 end
 
 old = {}
 
 etcd_uris = ENV.fetch('ETCDCTL_PEERS').split(',').map{|u| URI.parse(u)}
-crt = OpenSSL::X509::Certificate.new File.read ENV['ETCDCTL_CERT_FILE']
-key = OpenSSL::PKey::RSA.new File.read ENV['ETCDCTL_KEY_FILE']
+crt = OpenSSL::X509::Certificate.new File.read ENV.fetch 'ETCDCTL_CERT_FILE'
+key = OpenSSL::PKey::RSA.new File.read ENV.fetch 'ETCDCTL_KEY_FILE'
 etcd = Etcd.client host:     etcd_uris[0].host,
                    port:     etcd_uris[0].port || 80,
                    use_ssl:  etcd_uris[0].scheme.end_with?('s'),
-                   ca_file:  ENV['ETCDCTL_CA_FILE'],
+                   ca_file:  ENV.fetch('ETCDCTL_CA_FILE'),
                    ssl_cert: crt,
                    ssl_key:  key
 
@@ -57,16 +57,21 @@ Thread.new do
 		data = JSON.load res.body
 		new = {}
 		data["apps"].each do |app|
-			labels = app['labels'] || {}
-			next unless labels.include? 'DNS_TYPE'
-			id = app['id']
+			records = app['labels'].each.select{|k, v| k.start_with? 'kevincox-dns'}
+			next if records.empty?
+			records.map! do |k, v|
+				j = JSON.load v
+				
+				{
+					name: j.fetch('name'),
+					cdn:  j.fetch('cdn'),
+					ttl:  j.fetch('ttl'),
+				}
+			end
+			
+			id = app.fetch 'id'
 			new_keys = {}
 			old_keys = old.fetch id, {}
-			
-			type = labels.fetch 'DNS_TYPE'
-			name = labels.fetch 'DNS_NAME'
-			cdn  = %w(1 y yes on).include? labels.fetch('DNS_CDN', '1')
-			ttl  = labels.fetch('DNS_TTL', cdn ? 300 : 120).to_i
 			
 			healthchecks = app['healthChecks'].length
 			
@@ -74,16 +79,32 @@ Thread.new do
 				hcs = task.fetch 'healthCheckResults', [].freeze
 				next unless hcs && hcs.count{|hc| hc['alive'] } == healthchecks
 				
-				ip = ips[task['host']]
-				key = "/services/#{type}-#{name}/#{ip}"
-				value = to_json type: type,
-				                name: name,
-				                value: ip,
-				                ttl: ttl,
-				                cdn: cdn
-				etcd.set key, value: value, ttl: 60
-				new_keys[key] = true
-				old_keys.delete key
+				ips[task['host']].each do |addrinfo|
+					type = case addrinfo[0]
+					when 'AF_INET'
+						'A'
+					when 'AF_INET6'
+						'AAAA'
+					else
+						next
+					end
+					ip = addrinfo[3]
+					
+					records.each do |rec|
+						name = rec[:name]
+						ttl = rec[:ttl]
+						cdn = rec[:cdn]
+						key = "/services/#{type}-#{name}/#{ip}"
+						value = to_json type: type,
+						                name: name,
+						                value: ip,
+						                ttl: ttl,
+						                cdn: cdn
+						etcd.set key, value: value, ttl: 60
+						new_keys[key] = true
+						old_keys.delete key
+					end
+				end
 			end
 			
 			old_keys.each do |k, v|

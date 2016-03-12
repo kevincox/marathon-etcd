@@ -38,7 +38,7 @@ in rec {
 	marathon = klib.marathon.config [{
 		id = "/marathon-etcd";
 		
-		mem = 20;
+		mem = 50;
 		
 		env-files = [
 			"/etc/kevincox-etcd"

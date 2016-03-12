@@ -94,7 +94,7 @@ Thread.new do
 						name = rec[:name]
 						ttl = rec[:ttl]
 						cdn = rec[:cdn]
-						key = "/services/#{type}-#{name}/#{ip}"
+						key = "/services/A-#{name}/#{ip}"
 						value = to_json type: type,
 						                name: name,
 						                value: ip,

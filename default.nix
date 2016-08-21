@@ -40,16 +40,16 @@ in rec {
 		
 		mem = 50;
 		
+		constraints = [
+			["etcd" "LIKE" "v3"]
+		];
+		
 		env-files = [
 			"/etc/kevincox-etcd"
 			"/etc/kevincox-marathon-etcd"
 		];
 		exec = [ "${out}/bin/marathon-etcd" ];
 		user = "marathon-etcd";
-		
-		constraints = [
-			["etcd" "LIKE" "v3"]
-		];
 		
 		upgradeStrategy = {
 			minimumHealthCapacity = 0;

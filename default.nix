@@ -47,6 +47,10 @@ in rec {
 		exec = [ "${out}/bin/marathon-etcd" ];
 		user = "marathon-etcd";
 		
+		constraints = [
+			["etcd" "LIKE" "3"]
+		];
+		
 		upgradeStrategy = {
 			minimumHealthCapacity = 0;
 			maximumOverCapacity = 0;

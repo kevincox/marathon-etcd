@@ -48,7 +48,7 @@ in rec {
 		user = "marathon-etcd";
 		
 		constraints = [
-			["etcd" "LIKE" "3"]
+			["etcd" "LIKE" "v3"]
 		];
 		
 		upgradeStrategy = {

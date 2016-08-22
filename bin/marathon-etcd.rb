@@ -11,9 +11,8 @@ require 'thread'
 
 require 'etcd'
 
-MARATHON = ENV.fetch "MARATHON_URL"
-CRT = ENV.fetch "MARATHON_CRT"
-KEY = ENV.fetch "MARATHON_KEY"
+MARATHON = ENV.fetch 'MARATHON_URL'
+USER, _, PASS = ENV.fetch('MARATHON_AUTH').partition ':'
 
 ips = Hash.new do |this, host|
 	this[host] = Socket::getaddrinfo(host, nil, nil, :STREAM, nil, nil, false)
@@ -34,10 +33,13 @@ etcd = Etcd.client host:     etcd_uris[0].host,
 def connect
 	http = Net::HTTP.new MARATHON, 443
 	http.use_ssl = true
-	http.verify_mode = OpenSSL::SSL::VERIFY_NONE
-	http.cert = OpenSSL::X509::Certificate.new File.read CRT
-	http.key = OpenSSL::PKey::RSA.new File.read KEY
 	http
+end
+
+def get path
+	req = Net::HTTP::Get.new "https://#{MARATHON}#{path}"
+	req.basic_auth USER, PASS
+	req
 end
 
 def to_json data
@@ -53,7 +55,7 @@ Thread.new do
 	http = connect
 	
 	loop do
-		res = http.request_get "https://#{MARATHON}/v2/apps?embed=apps.tasks"
+		res = http.request get "/v2/apps?embed=apps.tasks"
 		data = JSON.load res.body
 		new = {}
 		data["apps"].each do |app|
@@ -122,8 +124,9 @@ end
 
 stream = connect
 stream.read_timeout = 24 * 60 * 60
-stream.request_get "https://#{MARATHON}/v2/events",
-	"Accept" => "text/event-stream" do |res|
+req = get "/v2/events"
+req['Accept'] = 'text/event-stream'
+stream.request req do |res|
 	res.read_body do |chunk|
 		mutex.synchronize { cond.signal }
 	end

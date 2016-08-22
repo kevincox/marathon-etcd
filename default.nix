@@ -46,7 +46,7 @@ in rec {
 		
 		env-files = [
 			"/etc/kevincox-etcd"
-			"/etc/kevincox-marathon-etcd"
+			"/run/keys/marathon-etcd"
 		];
 		exec = [ "${out}/bin/marathon-etcd" ];
 		user = "marathon-etcd";

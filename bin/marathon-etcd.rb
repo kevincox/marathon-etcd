@@ -65,7 +65,11 @@ Thread.new do
 				j = JSON.load v
 				
 				{
+					type: j['type'] || 'A',
 					name: j.fetch('name'),
+					priority: j['priority'] || 10,
+					weight: j['weight'] || 100,
+					port: j['port'] || 0,
 					cdn:  j.fetch('cdn'),
 					ttl:  j.fetch('ttl'),
 				}
@@ -78,33 +82,55 @@ Thread.new do
 			healthchecks = app['healthChecks'].length
 			
 			app['tasks'].each do |task|
-				hcs = task.fetch 'healthCheckResults', [].freeze
-				next unless hcs && hcs.count{|hc| hc['alive'] } == healthchecks
-				
-				ips[task['host']].each do |addrinfo|
-					type = case addrinfo[0]
-					when 'AF_INET'
-						'A'
-					when 'AF_INET6'
-						'AAAA'
-					else
-						next
-					end
-					ip = addrinfo[3]
-					
-					records.each do |rec|
-						name = rec[:name]
-						ttl = rec[:ttl]
-						cdn = rec[:cdn]
-						key = "/services/A-#{name}/#{ip}"
+				records.each do |rec|
+					case type = rec.fetch(:type)
+					when 'A'
+						hcs = task.fetch 'healthCheckResults', [].freeze
+						next unless hcs && hcs.count{|hc| hc['alive'] } == healthchecks
+						
+						ips[task['host']].each do |addrinfo|
+							type = case addrinfo[0]
+							when 'AF_INET'
+								'A'
+							when 'AF_INET6'
+								'AAAA'
+							else
+								next
+							end
+							ip = addrinfo[3]
+							
+							name = rec[:name]
+							ttl = rec[:ttl]
+							cdn = rec[:cdn]
+							key = "/services/A-#{name}/#{ip}"
+							value = to_json type: type,
+							                name: name,
+							                value: ip,
+							                ttl: ttl,
+							                cdn: cdn
+							etcd.set key, value: value, ttl: 60
+							new_keys[key] = true
+							old_keys.delete key
+						end
+					when 'SRV'
+						name = rec.fetch :name
+						proto = name.partition('.')[0][1, -1]
+						port = task.fetch('ports')[rec.fetch(:port)]
+						host = task.fetch 'host'
+						value = "#{rec[:priority]} #{rec[:weight]} #{port} #{host}"
+						
+						key = "/services/SRV-#{name}/#{host}:#{port}"
 						value = to_json type: type,
 						                name: name,
-						                value: ip,
-						                ttl: ttl,
-						                cdn: cdn
+						                value: value,
+						                ttl: rec[:ttl],
+						                cdn: false
 						etcd.set key, value: value, ttl: 60
 						new_keys[key] = true
 						old_keys.delete key
+					else
+						$stderr.puts "WRN: Unknown record type #{type.inspect}"
+						$stderr.puts "in #{rec.inspect}"
 					end
 				end
 			end

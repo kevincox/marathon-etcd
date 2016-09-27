@@ -22,7 +22,7 @@ old = {}
 
 etcd_uris = ENV.fetch('ETCDCTL_PEERS').split(',').map{|u| URI.parse(u)}
 crt = OpenSSL::X509::Certificate.new File.read ENV.fetch 'ETCDCTL_CERT_FILE'
-key = OpenSSL::PKey::RSA.new File.read ENV.fetch 'ETCDCTL_KEY_FILE'
+key = OpenSSL::PKey.read File.read ENV.fetch 'ETCDCTL_KEY_FILE'
 etcd = Etcd.client host:     etcd_uris[0].host,
                    port:     etcd_uris[0].port || 80,
                    use_ssl:  etcd_uris[0].scheme.end_with?('s'),
